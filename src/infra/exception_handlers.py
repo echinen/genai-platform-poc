@@ -7,6 +7,43 @@ import logging
 from src.infra.exceptions import AppException
 
 logger = logging.getLogger(__name__)
+CORRELATION_ID_HEADER = "X-Correlation-Id"
+
+
+def _get_correlation_id(request: Request) -> str | None:
+    return getattr(request.state, "correlation_id", None)
+
+
+def _error_response(
+    request: Request,
+    status_code: int,
+    code: str,
+    message: str,
+    details: list[dict] | None = None
+) -> JSONResponse:
+    correlation_id = _get_correlation_id(request)
+
+    error_payload: dict = {
+        "code": code,
+        "message": message,
+        "path": str(request.url.path)
+    }
+
+    if correlation_id:
+        error_payload["correlationId"] = correlation_id
+
+    if details is not None:
+        error_payload["details"] = details
+
+    response = JSONResponse(
+        status_code=status_code,
+        content={"error": error_payload}
+    )
+
+    if correlation_id:
+        response.headers[CORRELATION_ID_HEADER] = correlation_id
+
+    return response
 
 
 async def app_exception_handler(
@@ -14,15 +51,11 @@ async def app_exception_handler(
     exc: AppException
 ) -> JSONResponse:
     """Handle custom application exceptions."""
-    return JSONResponse(
+    return _error_response(
+        request=request,
         status_code=exc.status_code,
-        content={
-            "error": {
-                "code": exc.error_code,
-                "message": exc.message,
-                "path": str(request.url.path)
-            }
-        }
+        code=exc.error_code,
+        message=exc.message
     )
 
 
@@ -40,16 +73,12 @@ async def validation_exception_handler(
             }
         )
 
-    return JSONResponse(
+    return _error_response(
+        request=request,
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "error": {
-                "code": "VALIDATION_ERROR",
-                "message": "Dados de entrada inválidos.",
-                "path": str(request.url.path),
-                "details": details
-            }
-        }
+        code="VALIDATION_ERROR",
+        message="Dados de entrada inválidos.",
+        details=details
     )
 
 
@@ -78,18 +107,18 @@ async def httpx_exception_handler(
 
     logger.error(
         f"LLM Provider Error: {status_code} {reason}",
-        extra={"url": str(exc.request.url), "response": exc.response.text[:500]}
+        extra={
+            "url": str(exc.request.url),
+            "response": exc.response.text[:500],
+            "correlation_id": _get_correlation_id(request)
+        }
     )
 
-    return JSONResponse(
+    return _error_response(
+        request=request,
         status_code=status.HTTP_502_BAD_GATEWAY,
-        content={
-            "error": {
-                "code": "LLM_PROVIDER_ERROR",
-                "message": message,
-                "path": str(request.url.path)
-            }
-        }
+        code="LLM_PROVIDER_ERROR",
+        message=message
     )
 
 
@@ -101,18 +130,17 @@ async def generic_exception_handler(
     logger.error(
         f"Unexpected error: {str(exc)}",
         exc_info=True,
-        extra={"path": str(request.url.path)}
+        extra={
+            "path": str(request.url.path),
+            "correlation_id": _get_correlation_id(request)
+        }
     )
 
-    return JSONResponse(
+    return _error_response(
+        request=request,
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "error": {
-                "code": "INTERNAL_ERROR",
-                "message": "Erro interno do servidor. Tente novamente mais tarde.",
-                "path": str(request.url.path)
-            }
-        }
+        code="INTERNAL_ERROR",
+        message="Erro interno do servidor. Tente novamente mais tarde."
     )
 
 
