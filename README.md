@@ -137,6 +137,29 @@ Codigos tratados:
 - O header `X-Correlation-Id` volta na resposta
 - Em respostas de erro, `correlationId` tambem aparece no payload
 
+## Resiliencia
+
+O servico de LLM usa retry com `tenacity` para falhas transitorias.
+
+Tambem foi adicionado circuit breaker assincrono com `aiobreaker` para evitar sobrecarga durante indisponibilidade prolongada do provedor.
+
+Politica atual:
+- ate 3 tentativas
+- backoff exponencial (1s ate 8s)
+- retry apenas para erros transitorios
+- circuit breaker abre apos 3 falhas consecutivas
+- quando aberto, retorna erro amigavel e falha rapido (sem chamar o provedor)
+- tentativa de recuperacao apos 60s
+
+Erros elegiveis para retry:
+- falhas de rede/timeout (`ConnectError`, `ConnectTimeout`, `ReadTimeout`, `WriteTimeout`, `PoolTimeout`, `RemoteProtocolError`)
+- HTTP `408`, `409`, `425`, `429` e `5xx`
+
+Erros que **nao** fazem retry:
+- erros funcionais de requisicao (ex.: `400`, `401`, `403`, `404`)
+
+Essa abordagem melhora a disponibilidade sem mascarar erros de configuracao ou contrato.
+
 ## Persistencia
 
 Para cada prompt recebido:
@@ -191,6 +214,32 @@ Parar:
 ```bash
 docker compose down
 ```
+
+### Quando mudar dependencias (libs)
+
+Sempre que adicionar/remover/atualizar libs no ambiente local, atualize tambem o artefato usado no Docker.
+
+Fluxo recomendado:
+
+```bash
+# 1) Alterar dependencias
+poetry add <pacote>
+# ou
+poetry remove <pacote>
+
+# 2) Atualizar lock
+poetry lock
+
+# 3) Exportar requirements para o build da imagem
+poetry run pip freeze > requirements.txt
+
+# 4) Rebuild da imagem e subir novamente
+docker compose up -d --build
+```
+
+Observacao:
+- se quiser garantir rebuild completo sem cache: `docker compose build --no-cache api`
+- commite `pyproject.toml`, `poetry.lock` e `requirements.txt` apos mudancas de dependencia
 
 ## Comandos uteis
 
