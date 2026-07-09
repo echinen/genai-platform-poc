@@ -2,8 +2,16 @@ services:
 
   api:
     build: .
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/genai_db
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+      GEMINI_URL: ${GEMINI_URL:-https://generativelanguage.googleapis.com/v1beta/interactions}
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   postgres:
     image: postgres:16
@@ -11,5 +19,10 @@ services:
       POSTGRES_DB: genai_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d genai_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     ports:
       - "5432:5432"
