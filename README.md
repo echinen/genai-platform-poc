@@ -327,6 +327,43 @@ poetry check
 python3 -m compileall src
 ```
 
+## Testes
+
+Foram implementados testes essenciais para demonstrar qualidade de engenharia na POC.
+
+Estrutura:
+
+```text
+tests/
+  conftest.py
+  unit/
+    test_chat_service.py
+    test_llm_service.py
+  integration/
+    test_health.py
+    test_chat_endpoint.py
+```
+
+Como executar:
+
+```bash
+poetry run pytest -q
+```
+
+Escopo dos testes:
+- Unitarios (`tests/unit`): validam comportamento isolado dos servicos com `unittest.mock` e `AsyncMock`.
+- Integracao (`tests/integration`): validam contrato HTTP com `FastAPI TestClient`.
+
+Premissas de isolamento:
+- sem chamadas reais para Gemini (HTTP externo mockado)
+- sem chamadas reais para PostgreSQL (bootstrap e dependencias isolados para teste)
+
+Casos cobertos:
+- `ChatService.process`: chama LLM, persiste estado e retorna entidade com sucesso.
+- `LLMService`: sucesso, timeout e erro externo nao-retryable.
+- `GET /health`: retorna `200` e payload esperado.
+- `POST /v1/chat`: retorna `200` e payload esperado com integracao Gemini mockada.
+
 ## Referencias
 
 - FastAPI: https://fastapi.tiangolo.com/
