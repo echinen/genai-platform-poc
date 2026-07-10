@@ -41,7 +41,11 @@ APP_NAME=GenAI Platform
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-3.5-flash
 GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/interactions
+# Rodando a API localmente (fora do Docker)
 DATABASE_URL=postgresql://user:password@localhost:5432/database_name
+
+# Rodando a API no Docker Compose (host = nome do servico)
+# DATABASE_URL=postgresql://user:password@postgres:5432/database_name
 ```
 
 4. Rode a API
@@ -103,6 +107,39 @@ curl --location --request POST 'http://127.0.0.1:8000/v1/chat' \
 }'
 ```
 
+## Diagrama de sequencia
+
+Fluxo de execucao do `POST /v1/chat` na implementacao atual da POC.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant C as Cliente
+  participant A as API /v1/chat
+  participant D as PostgreSQL
+  participant L as LLM Service
+  participant G as Gemini API
+
+  C->>A: POST /v1/chat (userId, prompt)
+  A->>A: Valida payload
+  A->>D: INSERT prompt_history (status=PENDING)
+
+  A->>L: generate(prompt)
+  L->>G: Request para Gemini
+
+  alt Sucesso na LLM
+    G-->>L: Response (texto)
+    L-->>A: Texto gerado
+    A->>D: UPDATE status=SUCCESS + response + processing_time_ms
+    A-->>C: 200 OK (id, userId, prompt, response, model, timestamp)
+  else Falha na LLM
+    G-->>L: Erro/timeout/5xx
+    L-->>A: Excecao
+    A->>D: UPDATE status=FAILED
+    A-->>C: Erro padronizado (422/502/503/500)
+  end
+```
+
 ## Erros e observabilidade
 
 A API usa exception handlers globais para padronizar respostas de erro.
@@ -129,6 +166,7 @@ Formato padrao de erro:
 Codigos tratados:
 - `422` validacao de entrada
 - `502` erro no provedor LLM
+- `503` indisponibilidade temporaria no provedor LLM (ex.: circuit breaker aberto)
 - `500` erro interno inesperado
 
 ### Correlation ID
@@ -167,6 +205,41 @@ Para cada prompt recebido:
 - chama Gemini em tempo real
 - atualiza para `SUCCESS` com `response` e `processing_time_ms`
 - em caso de falha, atualiza para `FAILED`
+
+## Arquitetura alvo
+
+Diagrama de referencia para deploy em AWS, mantendo o fluxo implementado na POC.
+
+```mermaid
+flowchart TD
+  Client["Cliente"]
+
+  subgraph AWS["AWS Cloud"]
+    APIGW["API Gateway"]
+    ALB["Application Load Balancer"]
+    ECS["ECS Fargate<br/>FastAPI"]
+    RDS["Amazon RDS<br/>PostgreSQL"]
+    ECR["Amazon ECR"]
+    SM["Secrets Manager / SSM"]
+    CW["CloudWatch Logs + Metrics"]
+
+    APIGW --> ALB
+    ALB --> ECS
+    ECR --> ECS
+    SM --> ECS
+    ECS --> RDS
+    ECS --> CW
+  end
+
+  GEMINI["Gemini API"]
+
+  Client -->|HTTPS| APIGW
+  ECS -->|HTTPS| GEMINI
+```
+
+Observacao:
+- a implementacao atual da POC roda localmente via Docker Compose
+- o desenho acima representa a arquitetura alvo
 
 ## Estrutura de pastas
 
@@ -251,7 +324,7 @@ poetry show
 poetry check
 
 # compilar arquivos python (sanidade)
-python3 -m py_compile src/**/*.py
+python3 -m compileall src
 ```
 
 ## Referencias
