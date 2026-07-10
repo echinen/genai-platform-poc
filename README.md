@@ -241,6 +241,36 @@ Observacao:
 - a implementacao atual da POC roda localmente via Docker Compose
 - o desenho acima representa a arquitetura alvo
 
+## Decisoes arquiteturais
+
+### 1) Proposta de escalonamento para oscilacao de carga
+
+- Execucao stateless em ECS Fargate para permitir escala horizontal.
+- Auto Scaling por CPU, memoria e latencia (CloudWatch), com limites minimo e maximo de tasks.
+- API Gateway + ALB para distribuir carga e reduzir risco de gargalo por instancia.
+- Em picos extremos, aplicar rate limiting na borda para proteger o servico e manter disponibilidade.
+
+### 2) Proposta de observabilidade
+
+- Logs estruturados com `correlationId` para rastrear requisicoes ponta a ponta.
+- Metricas de API e LLM: latencia (p50/p95), taxa de erro (4xx/5xx), tempo de resposta do provedor.
+- Alarmes no CloudWatch para erro elevado, aumento de latencia e indisponibilidade de dependencia.
+- Dashboard unico para operacao com visao de throughput, erros e saturacao.
+
+### 3) Justificativa da escolha de banco de dados
+
+- PostgreSQL (RDS) foi escolhido por consistencia transacional e maturidade operacional.
+- O caso exige persistencia confiavel do historico de prompts para auditoria e analise futura.
+- Modelo relacional atende bem consultas estruturadas por usuario, periodo, status e tempos de processamento.
+- Em evolucao de escala, permite estrategias conhecidas como indice, particionamento e replica de leitura.
+
+### 4) Estrategia em caso de falha de dependencia
+
+- Timeout + retry com backoff exponencial para falhas transitorias.
+- Circuit breaker para fail-fast em indisponibilidade prolongada e para evitar efeito cascata.
+- Retorno de erro amigavel e padronizado ao cliente (`502/503`) com `correlationId`.
+- Persistencia do status `FAILED` para rastreabilidade operacional e analise posterior.
+
 ## Estrutura de pastas
 
 ```text
