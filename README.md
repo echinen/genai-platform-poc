@@ -41,6 +41,7 @@ APP_NAME=GenAI Platform
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-3.5-flash
 GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/interactions
+API_KEY=change_this_api_key
 # Rodando a API localmente (fora do Docker)
 DATABASE_URL=postgresql://user:password@localhost:5432/database_name
 
@@ -101,6 +102,7 @@ Exemplo de teste com curl:
 ```bash
 curl --location --request POST 'http://127.0.0.1:8000/v1/chat' \
 --header 'Content-Type: application/json' \
+--header 'X-API-Key: change_this_api_key' \
 --data-raw '{
   "userId": "12345",
   "prompt": "Como esta a cotacao do dolar hoje?"
@@ -164,6 +166,7 @@ Formato padrao de erro:
 ```
 
 Codigos tratados:
+- `401` nao autorizado (API key ausente ou invalida)
 - `422` validacao de entrada
 - `502` erro no provedor LLM
 - `503` indisponibilidade temporaria no provedor LLM (ex.: circuit breaker aberto)

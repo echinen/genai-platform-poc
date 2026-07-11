@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
 
 # Defaults de ambiente para evitar dependencias externas em testes.
 os.environ.setdefault("GEMINI_API_KEY", "test-key")
+os.environ.setdefault("API_KEY", "test-api-key")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 

@@ -4,6 +4,7 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/genai_db
+      API_KEY: ${API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
       GEMINI_URL: ${GEMINI_URL:-https://generativelanguage.googleapis.com/v1beta/interactions}
